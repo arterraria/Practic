@@ -1,0 +1,153 @@
+<!doctype html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Подсчет автобусов на остановке</title>
+    <style>
+        body {
+            margin: 0;
+            font-family: Arial, sans-serif;
+            background: #f2f5f7;
+            color: #1d2733;
+        }
+        header {
+            background: #1d2733;
+            color: white;
+            padding: 24px 40px;
+        }
+        main {
+            max-width: 1050px;
+            margin: 28px auto;
+            padding: 0 20px;
+        }
+        .card {
+            background: white;
+            border-radius: 16px;
+            padding: 22px;
+            margin-bottom: 22px;
+            box-shadow: 0 8px 26px rgba(0,0,0,0.08);
+        }
+        button {
+            background: #1d73e8;
+            color: white;
+            border: none;
+            border-radius: 10px;
+            padding: 12px 18px;
+            cursor: pointer;
+            font-weight: 700;
+        }
+        button:hover { background: #145fc4; }
+        input { margin: 12px 0 18px; }
+        #resultImage {
+            max-width: 100%;
+            border-radius: 12px;
+            display: none;
+            margin-top: 16px;
+            border: 1px solid #d8dde3;
+        }
+        .stats {
+            font-size: 20px;
+            font-weight: 700;
+            margin-top: 16px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 12px;
+        }
+        th, td {
+            padding: 10px;
+            border-bottom: 1px solid #e1e5ea;
+            text-align: left;
+        }
+        a { color: #1d73e8; }
+    </style>
+</head>
+<body>
+<header>
+    <h1>Подсчет автобусов на остановке</h1>
+    <p>Загрузите фотографию остановки. Система найдет автобусы и покажет их количество.</p>
+</header>
+<main>
+    <section class="card">
+        <h2>Загрузка изображения</h2>
+        <input type="file" id="imageInput" accept="image/*">
+        <br>
+        <button onclick="processImage()">Запустить обработку</button>
+        <button onclick="loadHistory()">Обновить историю</button>
+        <button onclick="window.location.href='/api/export/xlsx'">Скачать Excel-отчет</button>
+        <div id="stats" class="stats"></div>
+        <img id="resultImage" alt="Результат обработки">
+    </section>
+
+    <section class="card">
+        <h2>История обработок</h2>
+        <table>
+            <thead>
+                <tr>
+                    <th>ID</th>
+                    <th>Дата</th>
+                    <th>Автобусов</th>
+                    <th>Результат</th>
+                </tr>
+            </thead>
+            <tbody id="historyBody"></tbody>
+        </table>
+    </section>
+</main>
+<script>
+async function processImage() {
+    const input = document.getElementById('imageInput');
+    const stats = document.getElementById('stats');
+    const resultImage = document.getElementById('resultImage');
+
+    if (!input.files.length) {
+        stats.innerText = 'Сначала выберите изображение.';
+        return;
+    }
+
+    const formData = new FormData();
+    formData.append('file', input.files[0]);
+    stats.innerText = 'Идет обработка...';
+
+    const response = await fetch('/api/process', {
+        method: 'POST',
+        body: formData
+    });
+
+    if (!response.ok) {
+        const error = await response.json();
+        stats.innerText = error.detail || 'Ошибка обработки.';
+        return;
+    }
+
+    const data = await response.json();
+    stats.innerText = `Обнаружено автобусов: ${data.bus_count}`;
+    resultImage.src = data.result_url + '?' + Date.now();
+    resultImage.style.display = 'block';
+    await loadHistory();
+}
+
+async function loadHistory() {
+    const response = await fetch('/api/history');
+    const data = await response.json();
+    const body = document.getElementById('historyBody');
+    body.innerHTML = '';
+
+    for (const item of data.items) {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td>${item.id}</td>
+            <td>${item.created_at}</td>
+            <td>${item.bus_count}</td>
+            <td><a href="${item.result_file}" target="_blank">Открыть</a></td>
+        `;
+        body.appendChild(row);
+    }
+}
+
+loadHistory();
+</script>
+</body>
+</html>
